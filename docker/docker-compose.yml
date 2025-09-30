@@ -1,0 +1,65 @@
+# Define custom Docker network for containers
+# Docker’s default driver
+
+networks:
+  app-network:
+    driver: bridge
+
+# Define the services
+# 1) server-test: Test server's socket connection, broadcasting, disconnection handling and shutdown
+# 2) client-test: Test client's  connection, message sending/receiving, disconnection handling and shutdown
+# 3) main-server: Main application's server
+# 4) main-client: Main application's client
+
+services:
+  server-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: server
+    image: lchat-server-test:latest
+
+  client-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: client
+    depends_on:
+      server-test:
+          condition: service_completed_successfully
+    image: lchat-client-test:latest
+
+  
+  main-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: main_server
+    depends_on:
+      client-test:
+          condition: service_completed_successfully
+    ports:
+      - "8080:8080" # Expose port 8080 for the main server
+    image: lchat-main-server:latest
+    networks:
+      - app-network # Connect to custom network
+
+  main-client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: main_client
+    depends_on:
+      main-server:
+          condition: service_started
+    environment:
+      - SERVER_HOST=main-server # Use service name for inter-container communication
+      - SERVER_PORT=8080 # Port where main-server is exposed
+    command:
+      - "main_client" # Command to run the main client application
+    image: lchat-main-client:latest
+    stdin_open: true # Keep stdin open for interactive sessions
+    tty: true # Allocate a pseudo-TTY
+    networks:
+      - app-network
+
